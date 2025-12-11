@@ -711,7 +711,6 @@ Cada proceso tiene una función concreta.
   - MMON: Manageability Monitor
   - MMAN: Manageability Monitor
 
-
 Hay algunas configuraciones especiales de Oracle para cambiar ciertos comportamientos de estos procesos.
 Es importante reconocer algunos de ellos por su nombre, para luego poder entender mejor los logs de Oracle (alert log, trace files, etc). O ficheros de configuración de Oracle.
 
