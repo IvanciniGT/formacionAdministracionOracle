@@ -41,6 +41,10 @@ ALTER SESSION SET NLS_SORT = BINARY_CI;
 
 SELECT palabra FROM palabras ORDER BY palabra;
 
+ALTER SESSION SET NLS_SORT = XSPANISH_AI;
+SELECT palabra FROM palabras ORDER BY palabra;
+
+
 SELECT palabra FROM palabras WHERE palabra = 'Camion';
 -- Nos saca 1 fila
 
@@ -61,8 +65,7 @@ SELECT palabra FROM palabras ORDER BY palabra COLLATE BINARY;
 
 ALTER TABLE palabras MODIFY palabra VARCHAR2(100) COLLATE XSPANISH_AI;
 
-CREATE INDEX ix_palabras_ai
-ON palabras (palabra);
+CREATE INDEX ix_palabras_ai ON palabras (palabra);
 
 SELECT * FROM palabras WHERE palabra = 'Camion';
 
