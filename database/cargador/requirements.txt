@@ -1,0 +1,2 @@
+oracledb>=2.0.0
+Faker>=24.0.0
