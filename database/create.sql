@@ -1019,7 +1019,7 @@ CREATE TABLE Evaluaciones (
     CONSTRAINT PK_Evaluaciones PRIMARY KEY (MATRICULA_ID),
     CONSTRAINT FK_Evaluaciones_Matricula FOREIGN KEY (MATRICULA_ID) REFERENCES Matriculas(ID),
     CONSTRAINT CHK_Evaluaciones_Nota_Range CHECK (NOTA >= 0 AND NOTA <= 10)
-);
+) INITRANS 2 PCTFREE 10;
 
 -- Esta tabla si crece mucho (en paralelo a la tabla Matriculas) puede tener sentido particionarla
 

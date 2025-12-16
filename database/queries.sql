@@ -483,8 +483,36 @@ FROM
   (SELECT value FROM v$sysstat WHERE name = 'db block gets') dbbg,
   (SELECT value FROM v$sysstat WHERE name = 'consistent gets') cons;
 
+-- en nuestro caso, nos informa que el 99,83% de las lecturas se hacen 
+-- desde el buffer cache. Eso es una locura.. eso si, tenemos una BBDD pequeña.
+
+-- De hecho, el % ha bajado del 100% por la lectura inicial de los datos
+
+-- Ese estudio, le podemos hacer por tabla: Hay que hacerlo con los segmentos
+
 -- Si una tabla o un indice pute (da un hit ratio bajo), hay que mirar por qué?
 -- - Lo principal será ver el PCTFREE (porcentaje de espacio libre) los bloques de las tablas e índices.
 -- - Si es muy alto, o tiene muchos bloques sucios (borrados, actualizados), necesitaremos:
 --    - Reescribir tabla o índice (ALTER TABLE ... MOVE / ALTER INDEX ... REBUILD)
 --    - O bajar el PCTFREE (ALTER TABLE ... PCTFREE n / ALTER INDEX ... PCTFREE n)
+
+SELECT
+  s.owner,
+  s.object_name AS tablename,
+  s.object_type,
+  SUM(CASE WHEN s.statistic_name = 'logical reads' THEN s.value ELSE 0 END) AS logical_reads,
+  SUM(CASE WHEN s.statistic_name = 'physical reads' THEN s.value ELSE 0 END) AS physical_reads,
+  ROUND(
+    (1 - (SUM(CASE WHEN s.statistic_name = 'physical reads' THEN s.value ELSE 0 END) /
+           NULLIF(SUM(CASE WHEN s.statistic_name = 'logical reads' THEN s.value ELSE 0 END), 0))
+    ) * 100, 2
+  ) AS cache_hit_ratio_percent
+FROM
+  v$segment_statistics s
+WHERE
+  s.object_type = 'TABLE'
+GROUP BY
+  s.owner, s.object_name, s.object_type
+ORDER BY
+  tablename
+  ;
