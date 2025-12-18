@@ -25,7 +25,7 @@ BEGIN
     tabname => 'CURSOS',
     estimate_percent => NULL,
     block_sample => FALSE,
-    method_opt => 'FOR ALL COLUMNS SIZE AUTO',
+    method_opt => 'FOR ALL COLUMNS SIZE AUTO FOR COLUMNS PRECIO_PARA_PARTICULARES SIZE 255',
     cascade => TRUE
   );
 END;
@@ -254,16 +254,19 @@ FROM CURSOS c WHERE PRECIO_PARA_PARTICULARES < 220;
 -- El coste sube a 68 (full scan de CURSOS)
 
 -- Habrá un punto de equilibrio (umbral) en el que el optimizador decidirá usar o no el índice
-SELECT * FROM CURSOS WHERE PRECIO_PARA_PARTICULARES < 1000;
+SELECT /*+ GATHER_PLAN_STATISTICS */ * FROM PROFESOR.CURSOS WHERE PRECIO_PARA_PARTICULARES < 1000;
 -- En este caso, son 799 filas (39.95%)
 -- El optimizador decide no usar el índice... y hacer un full scan de CURSOS.
 -- El coste estimado es 68 (full scan de CURSOS)
 -- Si forzamos a usar el índice:
-SELECT /*+ INDEX(c IDX_CURSOS_PRECIO_PARTICULARES) */ * 
-FROM CURSOS c WHERE PRECIO_PARA_PARTICULARES < 1000;
+SELECT /*+ GATHER_PLAN_STATISTICS INDEX(c IDX_CURSOS_PRECIO_PARTICULARES) */ * 
+FROM PROFESOR.CURSOS c WHERE PRECIO_PARA_PARTICULARES < 1000;
 -- En este caso el coste se dispara a 799.. x10
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY_CURSOR(NULL, NULL, 'ALLSTATS LAST'));
 
-SELECT * FROM CURSOS WHERE PRECIO_PARA_PARTICULARES < 260;
+SELECT * FROM PROFESOR.CURSOS WHERE PRECIO_PARA_PARTICULARES < 250;
+
+SELECT * FROM PROFESOR.CURSOS WHERE PRECIO_PARA_PARTICULARES < 260;
 -- Recupera 66 filas, que supone 3.3%
 -- Encaja muy bien con lo que os comenté.. Un 4%/5%
 
@@ -271,11 +274,64 @@ SELECT * FROM CURSOS ORDER BY PRECIO_PARA_PARTICULARES;
 -- A pesar de tener un índice en PRECIO_PARA_PARTICULARES, donde los datos
 -- están ordenados por ese campo... no lo usa para ordenar.
 -- Hace un full scan de CURSOS y luego ordena (SORT ORDER BY)
+--ALTER SESSION SET CONTAINER = ORCLPDB1;
 
-SELECT * FROM CURSOS 
+SELECT * FROM PROFESOR.CURSOS 
 WHERE PRECIO_PARA_PARTICULARES < 300
 ORDER BY PRECIO_PARA_PARTICULARES ;
 -- Coste 68 (FULL SCAN de CURSOS) + 1 (SORT ORDER BY)
+
+-- Una cosa adicional que podemos hacer es comparar los datos estimados al ver un plan de ejecución 
+-- con los datos reales que devuelve la query.
+
+-- En lugar de hacer un EXPLAIN PLAN:
+EXPLAIN PLAN FOR 
+SELECT * FROM CURSOS 
+WHERE PRECIO_PARA_PARTICULARES < 300
+ORDER BY PRECIO_PARA_PARTICULARES ;
+
+SELECT /*+ PARALLEL(cursos, 8) GATHER_PLAN_STATISTICS */ *
+FROM PROFESOR.CURSOS
+WHERE PRECIO_PARA_PARTICULARES < 500;
+
+-- Ese plan ahora tetngo que consultar... se ha guardado
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY());
+
+-- En lugar de eso, puedo solicitar que se guarden datos reales de la ejecución.
+-- Eso se hace con un hint:
+SELECT /*+ GATHER_PLAN_STATISTICS INDEX(c IDX_CURSOS_PRECIO_PARTICULARES) */ *
+FROM PROFESOR.CURSOS 
+WHERE PRECIO_PARA_PARTICULARES < 305;
+
+-- Consultar los datos reales:
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY_CURSOR(NULL, NULL, 'ALLSTATS LAST'));
+-- Esto nos da mucha más información
+-- Tenemos por un lado, el plan de ejecución... ese es igual si se recojen estadísticas avanzadas o no.
+-- Ahora nos saca: E-ROWS (Estimated Rows) y A-ROWS (Actual Rows)
+-- Por otro lado, el tiempo real que ha tardado cada operación (A-TIME)
+-- Lo siguiente Buffers: Esto es el número de bloques leídos
+-- OMEM (Operating Memory): Memoria usada para operaciones como ordenaciones o hash joins.
+--  Ese dato es importante de cara a configurar el PGA (Program Global Area) de Oracle. La memoria de las conexiones.
+-- 1MEM: Memoria usada para operaciones de un solo bloque (por ejemplo lectura de un bloque de índice)
+-- Used-MEM: Memoria total usada por la operación.
+-- Aqui sobre todo podemos sacar varias cosas:
+-- - Si las estimaciones del optimizador son correctas (E-ROWS vs A-ROWS)
+-- - Nivel de fragmentación (si hay muchas lecturas de bloques, Buffers) para pocos resultados (A-ROWS)
+--   Eso significa que los datos están muy dispersos en disco... o que tengo row chaining (filas que ocupan más de un bloque)
+--   O que tengo row migration (filas que han crecido y se han movido a otro bloque)
+--   Si tengo bien dimensionado el PGA (OMEM, 1MEM, Used-MEM) para las operaciones que hago (ordenaciones, hash joins, etc) en esta query.
+-- En este caso, vemos que la estimación no está mal... pero podría estar mejor (E-ROWS: 105 vs A-ROWS: 97)
+-- Vamos a ver si conseguimos generar unas estadísticas mejores para esta columna PRECIO_PARA_PARTICULARES
+
+BEGIN
+  DBMS_STATS.GATHER_TABLE_STATS(
+    ownname => 'PROFESOR',
+    tabname => 'CURSOS',
+    method_opt => 'FOR COLUMNS SIZE 255 PRECIO_PARA_PARTICULARES',
+    cascade => TRUE -- También genera estadísticas de los índices
+  );
+END;
+/
 
 --
 -- Si forzamos el índice:
@@ -516,3 +572,6 @@ GROUP BY
 ORDER BY
   tablename
   ;
+
+DESC PROFESOR.EVALUACIONES;
+

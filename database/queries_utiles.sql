@@ -377,3 +377,53 @@ ORDER BY
 
 ---
 
+
+-- CONSULTA / GESTION DE ESTADISTICAS
+ALTER SESSION SET CONTAINER = ORCLPDB1;
+
+DESC DBA_TABLES;
+
+SELECT * FROM DBA_TABLES WHERE TABLE_NAME = 'CURSOS' AND OWNER = 'PROFESOR';
+
+DESC DBA_TAB_COL_STATISTICS;
+
+SELECT * FROM DBA_TAB_COL_STATISTICS WHERE TABLE_NAME = 'CURSOS' AND OWNER = 'PROFESOR';
+
+
+
+SELECT 
+    i.index_name,
+    t.table_name,
+    i.clustering_factor,
+    t.blocks AS table_blocks,
+    t.num_rows AS table_rows,
+    CASE 
+        WHEN i.clustering_factor < t.blocks * 1.5 THEN 'EXCELENTE (Cerca de Bloques)'
+        WHEN i.clustering_factor > t.num_rows * 0.8 THEN 'MALO (Cerca de Filas)'
+        ELSE 'REGULAR (Intermedio)'
+    END AS calidad_cf
+FROM dba_indexes i
+JOIN dba_tables t ON i.table_name = t.table_name
+WHERE i.table_name = 'CURSOS' -- Opcional: filtra por tabla
+      AND i.owner = 'PROFESOR' -- Opcional: filtra por esquema
+      AND t.owner = 'PROFESOR' -- Opcional: filtra por esquema
+ORDER BY i.table_name, i.index_name;
+
+-- En nuestro caso, los datos están trucados. Son aleatorios
+-- En una BBDD Real, si los datos están bien organizados, el clustering factor de muchas columnas irá será bueno
+-- Ya que los índices estarán ordenados de forma similar a como están los datos en la tabla... por ejemplo:
+-- ID -> Guarda una relación perfecta entre el índice y la tabla. Los datos en el índice EXACTAMENTE están en el mismo orden que en la tabla.
+-- Fecha de alta -> Si los datos se insertan en orden cronológico, el índice estará muy bien organizado respecto a la tabla (quizás no perfecto, pero si muy bueno)
+-- CODIGO: CUR-001, CUR-002, CUR-003, ... -> En este caso, el índice estará bastante muy organizado respecto a la tabla.
+-- Estado de gestión --> OBSOLETO, VIGENTE --> En este caso, los cursos más antiguos (los primeros en insertarse) 
+--    son lo que tendrán más probabilidad de estar obsoletos.
+--    Por tanto, el índice estará razonablemente bien organizado respecto a la tabla.
+--    Dicho de otra forma: La mayor parte de los cursos obsoletos estarán juntos en la tabla (al principio) 
+--    y los cursos vigentes estarán juntos en la tabla (al final)
+-- Nombre --> En este caso, el índice estará muy mal organizado respecto a la tabla.
+-- Duración --> En este caso, el índice estará muy mal organizado respecto a la tabla.
+-- Precio --> En este caso, más o menos....Cuersos más nuevos, serán más caros (aunque solo sea por efecto de la inflación)
+
+-- Esto es una pista de si un índice va a ser eficiente o no, en según que consultas.
+-- Para consultas que devuelvan muy pocos datos, al optimizador de consultas no le importa mucho el clustering factor.
+-- Pero para consultas que devuelvan muchos datos, un clustering factor malo puede hacer que el índice no sea eficiente y no se use.
