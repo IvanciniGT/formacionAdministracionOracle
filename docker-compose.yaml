@@ -1,0 +1,22 @@
+
+services:
+    oracle:
+        container_name: mi-oracle-2
+        image:          container-registry.oracle.com/database/enterprise:21.3.0.0
+        ports:
+            - 1521:1521 
+            - 5500:5500
+        environment:
+             - ORACLE_SID=ORCLCDB 
+             - ORACLE_PDB=ORCLPDB1 
+             - ORACLE_PWD=curso 
+             - ORACLE_EDITION=enterprise 
+             - ORACLE_CHARACTERSET=AL32UTF8
+             - ENABLE_ARCHIVELOG=true
+        volumes:
+            - /home/ubuntu/environment/data2:/opt/oracle/oradata
+
+# En otras herramientas de osftware que instale (Weblogic...), los volumenes los mapeamos directamente a 
+# A la ubicación física con que trabaje (cabina, iscsi, efs...).
+# En Oracle, lo más normal es hacer esa configuración a nivel del host.
+# Y en el host es donde mapeamos el volumen a la ubicación física.
